@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartExam Pro — Student Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);--text:#f0f0f8;--muted:rgba(255,255,255,.4);--accent:#6366f1;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6}
+[data-theme="light"]{--bg:#f0f0f8;--surface:rgba(255,255,255,.85);--surface2:rgba(255,255,255,1);--border:rgba(0,0,0,.09);--border2:rgba(0,0,0,.15);--text:#0f0f1a;--muted:rgba(0,0,0,.45)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+.orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:.12}
+.orb1{width:700px;height:700px;background:#6366f1;top:-200px;left:-100px}
+.orb2{width:500px;height:500px;background:#8b5cf6;bottom:-100px;right:-100px}
+.grid-bg{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:48px 48px}
+.content{position:relative;z-index:1}
+nav{display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:rgba(5,5,8,.85);border-bottom:1px solid var(--border);backdrop-filter:blur(24px);position:sticky;top:0;z-index:100}
+.nav-brand{display:flex;align-items:center;gap:12px;font-family:'Syne',sans-serif;font-weight:800;font-size:20px;text-decoration:none;color:var(--text)}
+.nav-logo{width:40px;height:40px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 4px 16px rgba(99,102,241,.4)}
+.nav-right{display:flex;align-items:center;gap:10px}
+.user-chip{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:30px;padding:7px 16px;font-size:14px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn-sm{padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:.2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-logout{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);color:#fca5a5}
+.btn-logout:hover{background:rgba(239,68,68,.22)}
+.theme-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:16px;width:38px;height:38px;padding:0;justify-content:center;border-radius:10px}
+.hamburger-btn{width:42px;height:42px;background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.2));border:1px solid rgba(99,102,241,.35);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;transition:.25s;position:relative}
+.hamburger-btn:hover{background:linear-gradient(135deg,rgba(99,102,241,.35),rgba(139,92,246,.35));transform:scale(1.05)}
+.hamburger-btn span{display:block;width:18px;height:2px;background:var(--accent);border-radius:2px;transition:.3s}
+.hamburger-btn.open span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+.hamburger-btn.open span:nth-child(2){opacity:0;transform:translateX(-8px)}
+.hamburger-btn.open span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
+.hamburger-badge{position:absolute;top:-6px;right:-6px;background:#6366f1;color:#fff;font-size:10px;font-weight:700;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;border:2px solid var(--bg)}
+.drawer-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.65);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .3s}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:201;width:420px;max-width:95vw;background:rgba(8,8,14,.97);border-left:1px solid var(--border2);backdrop-filter:blur(30px);transform:translateX(100%);transition:transform .35s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{transform:translateX(0)}
+.drawer-header{padding:24px 24px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px}
+.drawer-title-icon{width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.drawer-close{width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.drawer-close:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#fca5a5}
+.drawer-search{padding:16px 24px;border-bottom:1px solid var(--border);flex-shrink:0}
+.search-wrap{position:relative}
+.search-input{width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 14px 10px 38px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:.2s}
+.search-input:focus{border-color:var(--accent);background:rgba(99,102,241,.05)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+.drawer-tabs{display:flex;gap:6px;padding:12px 24px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.dtab{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:.2s;text-transform:uppercase;letter-spacing:.5px}
+.dtab.active{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.4);color:#a5b4fc}
+.drawer-body{flex:1;overflow-y:auto;padding:16px 24px;display:flex;flex-direction:column;gap:10px}
+.drawer-body::-webkit-scrollbar{width:4px}
+.drawer-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+.material-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:.25s;display:flex;align-items:flex-start;gap:14px;text-decoration:none;color:var(--text)}
+.material-card:hover{background:var(--surface2);border-color:var(--border2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.mat-icon{width:48px;height:48px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.mat-icon.pdf{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.2)}
+.mat-icon.book{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.2)}
+.mat-icon.video{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.2)}
+.mat-icon.note{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.2)}
+.mat-info{flex:1;min-width:0}
+.mat-title{font-weight:600;font-size:14px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mat-desc{font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px}
+.mat-meta{display:flex;align-items:center;gap:8px}
+.mat-tag{font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:600;padding:3px 8px;border-radius:5px;text-transform:uppercase}
+.tag-pdf{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.tag-book{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.2)}
+.tag-video{background:rgba(245,158,11,.15);color:#fde68a;border:1px solid rgba(245,158,11,.2)}
+.tag-note{background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.2)}
+.mat-size{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.mat-action{width:30px;height:30px;border-radius:8px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;display:flex;align-items:center;justify-content:center;font-size:14px;transition:.2s;flex-shrink:0;align-self:center}
+.material-card:hover .mat-action{background:rgba(99,102,241,.25);border-color:rgba(99,102,241,.4)}
+.drawer-section-label{font-size:11px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:8px 0 4px}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;color:var(--muted);text-align:center;gap:12px}
+.empty-state .es-icon{font-size:48px;opacity:.4}
+.empty-state p{font-size:14px}
+main{max-width:960px;margin:0 auto;padding:52px 24px}
+.hero{margin-bottom:44px;animation:up .6s cubic-bezier(.16,1,.3,1) both}
+.hero-tag{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px}
+.hero h1{font-family:'Syne',sans-serif;font-size:46px;font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:10px}
+.hero p{font-size:16px;color:var(--muted)}
+@keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;animation:up .6s .1s cubic-bezier(.16,1,.3,1) both}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px;display:flex;align-items:center;gap:16px;transition:.25s}
+.stat:hover{background:var(--surface2);transform:translateY(-2px);border-color:var(--border2)}
+.stat-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ic-purple{background:rgba(99,102,241,.18)}.ic-blue{background:rgba(59,130,246,.18)}.ic-green{background:rgba(16,185,129,.18)}.ic-yellow{background:rgba(245,158,11,.18)}
+.stat-info h3{font-size:28px;font-weight:800;letter-spacing:-1px;font-family:'Syne',sans-serif}
+.stat-info p{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px;margin-bottom:28px;animation:up .6s .15s cubic-bezier(.16,1,.3,1) both;text-align:center}
+.result-card .big-score{font-family:'Syne',sans-serif;font-size:64px;font-weight:800;letter-spacing:-2px}
+.result-card .big-score.pass{color:var(--green)}.result-card .big-score.fail{color:var(--red)}
+.verdict{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:20px;font-size:14px;font-weight:700;margin:12px 0}
+.verdict.pass{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#6ee7b7}
+.verdict.fail{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+.instr-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;margin-bottom:28px;animation:up .6s .2s cubic-bezier(.16,1,.3,1) both}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:24px}
+.card-head h2{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+.chip{background:rgba(99,102,241,.18);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);border-radius:7px;padding:3px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600}
+.rules{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.rule{display:flex;gap:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:16px}
+.ri{font-size:22px;flex-shrink:0;margin-top:2px}
+.rt h4{font-size:14px;font-weight:600;margin-bottom:3px}
+.rt p{font-size:12px;color:var(--muted);line-height:1.5}
+.start-area{text-align:center;animation:up .6s .3s cubic-bezier(.16,1,.3,1) both}
+.start-btn{display:inline-flex;align-items:center;gap:12px;padding:18px 44px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:18px;text-decoration:none;font-family:'Syne',sans-serif;font-size:18px;font-weight:700;box-shadow:0 12px 36px rgba(99,102,241,.45);transition:.25s;position:relative;overflow:hidden;border:none;cursor:pointer}
+.start-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.12),transparent)}
+.start-btn:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 20px 44px rgba(99,102,241,.55)}
+.start-btn .arr{transition:.2s}.start-btn:hover .arr{transform:translateX(4px)}
+.start-btn.disabled{background:rgba(255,255,255,.1);box-shadow:none;pointer-events:none;color:var(--muted)}
+.start-note{font-size:12px;color:var(--muted);margin-top:14px;font-family:'JetBrains Mono',monospace}
+.alert{padding:13px 16px;border-radius:12px;font-size:14px;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.alert-error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+</style>
+</head>
+<body>
+<div class="bg"><div class="orb orb1"></div><div class="orb orb2"></div></div>
+<div class="grid-bg"></div>
+<div class="content">
+
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="studyDrawer">
+  <div class="drawer-header">
+    <div class="drawer-title"><div class="drawer-title-icon">📚</div>Study Materials</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-search">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" type="text" id="materialSearch" placeholder="Search materials…" oninput="filterMaterials(this.value)">
+    </div>
+  </div>
+  <div class="drawer-tabs">
+    <button class="dtab active" onclick="filterTab(this,'all')">All</button>
+    <button class="dtab" onclick="filterTab(this,'pdf')">PDFs</button>
+    <button class="dtab" onclick="filterTab(this,'book')">Books</button>
+    <button class="dtab" onclick="filterTab(this,'note')">Notes</button>
+    <button class="dtab" onclick="filterTab(this,'video')">Videos</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <div class="drawer-section-label">📌 Recommended for Exam</div>
+    <a href="{{ url_for('static', filename='pdfs/dsa.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="pdf" data-title="Data Structures Algorithms Complete Guide">
+      <div class="mat-icon pdf">📄</div>
+      <div class="mat-info">
+        <div class="mat-title">Data Structures & Algorithms – Complete Guide</div>
+        <div class="mat-desc">Covers arrays, stacks, queues, trees, graphs, sorting, and searching algorithms with examples.</div>
+        <div class="mat-meta"><span class="mat-tag tag-pdf">PDF</span><span class="mat-size">4.2 MB · 128 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <a href="{{ url_for('static', filename='pdfs/fundamentals.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="book" data-title="Computer Science Fundamentals Textbook">
+      <div class="mat-icon book">📘</div>
+      <div class="mat-info">
+        <div class="mat-title">Computer Science Fundamentals – Textbook</div>
+        <div class="mat-desc">Comprehensive textbook covering CPU, memory, networking, and operating system concepts.</div>
+        <div class="mat-meta"><span class="mat-tag tag-book">BOOK</span><span class="mat-size">12.8 MB · 340 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <a href="{{ url_for('static', filename='pdfs/oop.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="pdf" data-title="OOP Concepts Quick Reference">
+      <div class="mat-icon pdf">📄</div>
+      <div class="mat-info">
+        <div class="mat-title">OOP Concepts – Quick Reference</div>
+        <div class="mat-desc">Inheritance, polymorphism, encapsulation, abstraction with real-world examples in Java and Python.</div>
+        <div class="mat-meta"><span class="mat-tag tag-pdf">PDF</span><span class="mat-size">1.8 MB · 32 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <div class="drawer-section-label">🌐 Networking & Web</div>
+    <a href="{{ url_for('static', filename='pdfs/networking_notes.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="note" data-title="Networking Protocols Study Notes">
+      <div class="mat-icon note">📝</div>
+      <div class="mat-info">
+        <div class="mat-title">Networking Protocols – Study Notes</div>
+        <div class="mat-desc">HTTP, SMTP, FTP, TCP/IP, DNS – concise notes for quick revision before exam.</div>
+        <div class="mat-meta"><span class="mat-tag tag-note">NOTES</span><span class="mat-size">520 KB · 18 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <a href="{{ url_for('static', filename='pdfs/webtech.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="pdf" data-title="Web Technologies HTML CSS JavaScript">
+      <div class="mat-icon pdf">📄</div>
+      <div class="mat-info">
+        <div class="mat-title">Web Technologies – HTML, CSS, JavaScript</div>
+        <div class="mat-desc">Essential web development concepts with syntax examples and project-based practice exercises.</div>
+        <div class="mat-meta"><span class="mat-tag tag-pdf">PDF</span><span class="mat-size">3.1 MB · 76 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <div class="drawer-section-label">🎬 Video Lectures</div>
+    <a href="{{ url_for('static', filename='videos/binarysearch.mp4') }}" 
+   target="_blank"
+   class="material-card" data-type="video" data-title="Binary Search Explained Video Lecture">
+      <div class="mat-icon video">🎬</div>
+      <div class="mat-info">
+        <div class="mat-title">Binary Search Explained – Video Lecture</div>
+        <div class="mat-desc">Step-by-step explanation of binary search with O(log n) complexity proof and code walkthrough.</div>
+        <div class="mat-meta"><span class="mat-tag tag-video">VIDEO</span><span class="mat-size">22 min · HD</span></div>
+      </div>
+      <div class="mat-action">▶</div>
+    </a>
+    
+    <div class="drawer-section-label">📝 Previous Year Papers</div>
+    <a href="{{ url_for('static', filename='pdfs/paper2024.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="pdf" data-title="CS101 Previous Year Question Paper 2024">
+      <div class="mat-icon pdf">📄</div>
+      <div class="mat-info">
+        <div class="mat-title">CS101 – Question Paper 2024</div>
+        <div class="mat-desc">Complete previous year paper with answers. Ideal for exam pattern familiarization.</div>
+        <div class="mat-meta"><span class="mat-tag tag-pdf">PDF</span><span class="mat-size">890 KB · 8 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+    <a href="{{ url_for('static', filename='pdfs/paper2023.pdf') }}" 
+   target="_blank"
+   download
+   class="material-card" data-type="pdf" data-title="CS101 Previous Year Question Paper 2023">
+      <div class="mat-icon pdf">📄</div>
+      <div class="mat-info">
+        <div class="mat-title">CS101 – Question Paper 2023</div>
+        <div class="mat-desc">Practice paper with detailed solutions and marking scheme.</div>
+        <div class="mat-meta"><span class="mat-tag tag-pdf">PDF</span><span class="mat-size">760 KB · 8 pages</span></div>
+      </div>
+      <div class="mat-action">↓</div>
+    </a>
+  </div>
+</div>
+
+<nav>
+  <a href="/dashboard" class="nav-brand"><div class="nav-logo">🎓</div>SmartExam Pro</a>
+  <div class="nav-right">
+    <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleDrawer()" title="Study Materials">
+      <span></span><span></span><span></span>
+      <div class="hamburger-badge">9</div>
+    </button>
+    <button class="btn-sm theme-btn" onclick="toggleTheme()">🌙</button>
+    <div class="user-chip"><div class="dot"></div>{{ session.get('student_name','Student') }}</div>
+    <a href="/logout" class="btn-sm btn-logout">⬅ Logout</a>
+  </div>
+</nav>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}{% for cat, msg in messages %}
+  <div class="alert alert-{{cat}}"><span>❌</span><span>{{msg}}</span></div>
+  {% endfor %}{% endif %}{% endwith %}
+
+  <div class="hero">
+    <div class="hero-tag">Welcome back — {{ session.get('student_name','Student') }}</div>
+    <h1>Ready to prove<br>your knowledge?</h1>
+    <p>Complete the exam with integrity. Good luck! 🚀 &nbsp;·&nbsp; Tap <strong>☰</strong> for study materials.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-icon ic-purple">⏱</div><div class="stat-info"><h3>60s</h3><p>Duration</p></div></div>
+    <div class="stat"><div class="stat-icon ic-blue">📋</div><div class="stat-info"><h3>10</h3><p>Questions</p></div></div>
+    <div class="stat"><div class="stat-icon ic-green">✅</div><div class="stat-info"><h3>5+</h3><p>Pass Score</p></div></div>
+  </div>
+
+  {% if attempted and result %}
+  <div class="result-card">
+    <p style="color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Your Exam Result</p>
+    <div class="big-score {{ 'pass' if result.score >= 5 else 'fail' }}">{{ result.score }}<span style="font-size:28px;opacity:.5"> / {{ result.total }}</span></div>
+    <div class="verdict {{ 'pass' if result.score >= 5 else 'fail' }}">{{ '✅ PASSED' if result.score >= 5 else '❌ FAILED' }}</div>
+    <p style="color:var(--muted);font-size:13px;margin-top:8px">Submitted: {{ result.timestamp }} &nbsp;|&nbsp; Violations: {{ result.violations }}</p>
+  </div>
+  {% endif %}
+
+  <div class="instr-card">
+    <div class="card-head"><span>📋</span><h2>Exam Rules</h2><span class="chip">IMPORTANT</span></div>
+    <div class="rules">
+      <div class="rule"><div class="ri">🎥</div><div class="rt"><h4>Camera + Mic Required</h4><p>Your webcam and microphone will be active for AI proctoring throughout the exam.</p></div></div>
+      <div class="rule"><div class="ri">🚫</div><div class="rt"><h4>No Tab Switching</h4><p>Leaving the exam tab triggers a warning. 3 warnings = auto-submit.</p></div></div>
+      <div class="rule"><div class="ri">📱</div><div class="rt"><h4>No Devices in Frame</h4><p>AI detects phones, books, and unusual objects — flagged immediately.</p></div></div>
+      <div class="rule"><div class="ri">👤</div><div class="rt"><h4>One Person Only</h4><p>Multiple faces or no face triggers an automatic warning and potential submission.</p></div></div>
+      <div class="rule"><div class="ri">⌨️</div><div class="rt"><h4>Shortcuts Disabled</h4><p>Copy, paste, right-click, and all exam-bypass shortcuts are blocked.</p></div></div>
+      <div class="rule"><div class="ri">🔁</div><div class="rt"><h4>One Attempt Only</h4><p>You cannot re-attempt this exam once submitted. Make it count!</p></div></div>
+    </div>
+  </div>
+
+  <div class="start-area">
+    {% if attempted %}
+      <button class="start-btn disabled">🔒 Exam Already Submitted</button>
+      <p class="start-note">Re-attempts are not permitted. Contact your administrator.</p>
+    {% else %}
+      <a href="/exam" class="start-btn"><span>🚀</span> Begin Exam <span class="arr">→</span></a>
+      <p class="start-note">By clicking Begin Exam, you agree to all exam rules above.</p>
+    {% endif %}
+  </div>
+</main>
+</div>
+<script>
+function toggleDrawer(){
+  const btn=document.getElementById('hamburgerBtn'),drawer=document.getElementById('studyDrawer'),overlay=document.getElementById('drawerOverlay');
+  if(drawer.classList.contains('open')){closeDrawer();}
+  else{btn.classList.add('open');drawer.classList.add('open');overlay.classList.add('open');document.body.style.overflow='hidden';}
+}
+function closeDrawer(){
+  document.getElementById('hamburgerBtn').classList.remove('open');
+  document.getElementById('studyDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+let activeTab='all';
+function filterTab(el,type){
+  activeTab=type;
+  document.querySelectorAll('.dtab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');applyFilter();
+}
+function filterMaterials(q){applyFilter(q);}
+function applyFilter(query){
+  const q=(query||document.getElementById('materialSearch').value).toLowerCase();
+  const cards=document.querySelectorAll('.material-card');
+  let visible=0;
+  cards.forEach(card=>{
+    const matchType=activeTab==='all'||card.dataset.type===activeTab;
+    const matchQ=!q||card.dataset.title.toLowerCase().includes(q);
+    card.style.display=(matchType&&matchQ)?'':'none';
+    if(matchType&&matchQ)visible++;
+  });
+  const body=document.getElementById('drawerBody');
+  const ex=body.querySelector('.empty-state');
+  if(ex)ex.remove();
+  if(visible===0){
+    const es=document.createElement('div');es.className='empty-state';
+    es.innerHTML='<div class="es-icon">🔍</div><p>No materials match your search.</p>';
+    body.appendChild(es);
+  }
+}
+function toggleTheme(){
+  const h=document.documentElement,t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+  h.setAttribute('data-theme',t);document.querySelector('.theme-btn').textContent=t==='dark'?'🌙':'☀️';
+  localStorage.setItem('theme',t);
+}
+(function(){const t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-btn').textContent=t==='dark'?'🌙':'☀️';})();
+</script>
+</body>
+</html>

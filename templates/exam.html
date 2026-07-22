@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartExam Pro — Live Exam</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<style>
+/* ══════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════ */
+:root {
+  --bg: #04040a;
+  --bg2: #080810;
+  --surface: rgba(255,255,255,.045);
+  --surface2: rgba(255,255,255,.08);
+  --border: rgba(255,255,255,.07);
+  --border2: rgba(255,255,255,.13);
+  --text: #eeeef8;
+  --muted: rgba(255,255,255,.38);
+  --accent: #6366f1;
+  --accent2: #8b5cf6;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --orange: #f97316;
+  --sidebar-w: 252px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══════════════════════════════════════
+   FULLSCREEN GATE
+══════════════════════════════════════ */
+#fsGate {
+  position: fixed; inset: 0; z-index: 9999;
+  background: radial-gradient(ellipse at 30% 50%, rgba(99,102,241,.15) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(139,92,246,.12) 0%, transparent 50%),
+              #04040a;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+}
+.gate-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 28px;
+  padding: 52px 48px;
+  text-align: center;
+  max-width: 480px;
+  width: 90%;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 40px 80px rgba(0,0,0,.6);
+}
+.gate-icon { font-size: 72px; margin-bottom: 16px; display: block; animation: floatIcon 3s ease-in-out infinite; }
+@keyframes floatIcon { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.gate-brand { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 12px; }
+.gate-card h1 { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; }
+.gate-card p { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 28px; }
+.gate-rules { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; text-align: left; }
+.gate-rule { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+.gate-rule span:first-child { font-size: 18px; flex-shrink: 0; }
+.fs-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; border: none; border-radius: 14px;
+  font-size: 16px; font-weight: 700; font-family: 'Syne', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(99,102,241,.45);
+  transition: .25s; position: relative; overflow: hidden;
+}
+.fs-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(99,102,241,.55); }
+.fs-btn::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,.12), transparent); }
+#fsGateError { color: #fca5a5; font-size: 13px; margin-top: 12px; display: none; }
+
+/* ══════════════════════════════════════
+   MAIN EXAM LAYOUT
+══════════════════════════════════════ */
+#examMain { display: none; flex-direction: column; height: 100%; }
+
+/* TOP BAR */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; height: 56px; flex-shrink: 0;
+  background: rgba(4,4,10,.96);
+  border-bottom: 1px solid var(--border2);
+  backdrop-filter: blur(24px);
+  z-index: 50;
+}
+.brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; margin-right: auto; display: flex; align-items: center; gap: 8px; }
+.brand-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; box-shadow: 0 2px 10px rgba(99,102,241,.4); }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); animation: livePulse 1s infinite; }
+@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(.85); } }
+
+/* TIMER */
+.timer-wrap { display: flex; align-items: center; gap: 8px; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.22); border-radius: 10px; padding: 7px 14px; }
+.timer-val { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; color: #fca5a5; letter-spacing: 1px; }
+.timer-wrap.critical { background: rgba(239,68,68,.25); border-color: rgba(239,68,68,.5); animation: timerShake .5s infinite; }
+@keyframes timerShake { 0%,100% { transform: none; } 25% { transform: scale(1.03); } 75% { transform: scale(.97); } }
+
+/* WARN COUNTER */
+.warn-pill { display: flex; align-items: center; gap: 7px; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.22); border-radius: 10px; padding: 7px 14px; font-size: 13px; font-weight: 700; color: #fcd34d; font-family: 'JetBrains Mono', monospace; }
+.warn-pill.active { background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.4); color: #fca5a5; animation: warnPulse 1s infinite; }
+@keyframes warnPulse { 50% { transform: scale(1.03); } }
+
+/* STATUS PILLS */
+.status-row { display: flex; gap: 6px; }
+.sp { display: flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 8px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; border: 1px solid var(--border); transition: .3s; }
+.sp.on  { background: rgba(16,185,129,.1);  border-color: rgba(16,185,129,.3);  color: #6ee7b7; }
+.sp.off { background: rgba(239,68,68,.1);   border-color: rgba(239,68,68,.3);   color: #fca5a5; }
+.sp.loading { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.2); color: #fde68a; }
+.sp-dot { width: 6px; height: 6px; border-radius: 50%; }
+.sp.on .sp-dot { background: var(--green); box-shadow: 0 0 5px var(--green); animation: livePulse 1.5s infinite; }
+.sp.off .sp-dot { background: var(--red); }
+.sp.loading .sp-dot { background: var(--yellow); animation: livePulse 1s infinite; }
+.btn-theme { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: .2s; }
+.btn-theme:hover { background: var(--surface2); }
+
+/* LAYOUT */
+.exam-body { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-inner { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sidebar-inner::-webkit-scrollbar { width: 3px; }
+.sidebar-inner::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Camera box */
+.cam-wrap {
+  position: relative; border-radius: 12px; overflow: hidden;
+  border: 2px solid var(--border); aspect-ratio: 4/3;
+  background: #000; flex-shrink: 0; transition: border-color .3s, box-shadow .3s;
+}
+.cam-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cam-badge {
+  position: absolute; bottom: 7px; left: 7px; right: 7px;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(8px);
+  border-radius: 7px; padding: 5px 9px;
+  font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #fff;
+  display: flex; align-items: center; gap: 5px;
+}
+.cam-warn-banner {
+  position: absolute; inset: 0;
+  background: rgba(239,68,68,.18);
+  display: none; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+  color: #fca5a5; text-align: center; padding: 8px;
+  animation: camFlash .6s infinite;
+}
+@keyframes camFlash { 50% { background: rgba(239,68,68,.3); } }
+.cam-wrap.danger { border-color: var(--red) !important; box-shadow: 0 0 18px rgba(239,68,68,.4) !important; }
+.cam-wrap.warning-state { border-color: var(--yellow) !important; box-shadow: 0 0 12px rgba(245,158,11,.3) !important; }
+
+/* Section labels */
+.sec-lbl { font-size: 10px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 4px 0 2px; }
+
+/* AI box */
+.ai-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.ai-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.ai-row:last-child { border: none; padding-bottom: 0; }
+.ai-lbl { color: var(--muted); font-size: 11px; }
+.ai-val { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; }
+.ai-val.ok  { color: var(--green); }
+.ai-val.bad { color: var(--red); }
+.ai-val.warn { color: var(--yellow); }
+.ai-val.loading { color: var(--yellow); }
+
+/* Nav grid */
+.nav-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.nav-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 6px; }
+.nav-btn {
+  aspect-ratio: 1; border: none; border-radius: 7px;
+  background: rgba(255,255,255,.07); color: var(--muted);
+  font-weight: 700; font-size: 12px; cursor: pointer; transition: .2s;
+}
+.nav-btn.current { background: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(99,102,241,.4); }
+.nav-btn.answered { background: rgba(16,185,129,.2); color: var(--green); border: 1px solid rgba(16,185,129,.35); }
+.nav-btn:hover:not(.current):not(.answered) { background: rgba(255,255,255,.14); }
+
+/* Progress */
+.prog-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.prog-bar { height: 5px; background: rgba(255,255,255,.07); border-radius: 5px; overflow: hidden; margin: 6px 0 3px; }
+.prog-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 5px; transition: width .4s cubic-bezier(.16,1,.3,1); width: 10%; }
+.prog-text { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-align: right; }
+
+/* Violation log */
+.vlog { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 80px; }
+.vlog-list { overflow-y: auto; flex: 1; font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+.vlog-list::-webkit-scrollbar { width: 2px; }
+.vlog-item { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.vlog-item.vi-face  { color: #f87171; }
+.vlog-item.vi-obj   { color: #fb923c; }
+.vlog-item.vi-tab   { color: #fbbf24; }
+.vlog-item.vi-audio { color: #34d399; }
+.vlog-item.vi-misc  { color: #a5b4fc; }
+
+/* ══════════════════════════════════════
+   EXAM AREA
+══════════════════════════════════════ */
+.exam-area { flex: 1; overflow-y: auto; padding: 28px 36px 40px; }
+.exam-area::-webkit-scrollbar { width: 5px; }
+.exam-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 5px; }
+
+.q-header { margin-bottom: 20px; }
+.q-tag { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+.q-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; line-height: 1.4; letter-spacing: -.5px; }
+
+.qcard { display: none; animation: qSlide .35s cubic-bezier(.16,1,.3,1) both; }
+.qcard.active { display: block; }
+@keyframes qSlide { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+/* Question card wrapper */
+.q-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 28px 32px; margin-bottom: 20px; }
+
+.options { display: flex; flex-direction: column; gap: 10px; }
+.opt {
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(255,255,255,.03); border: 1.5px solid rgba(255,255,255,.07);
+  border-radius: 12px; padding: 15px 18px; cursor: pointer;
+  transition: all .2s; font-size: 15px; user-select: none;
+}
+.opt:hover { background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.4); transform: translateX(2px); }
+.opt.selected { background: rgba(99,102,241,.15); border-color: #6366f1; }
+.opt input { display: none; }
+.opt-key {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace; transition: .2s;
+}
+.opt.selected .opt-key { background: #6366f1; border-color: #6366f1; color: #fff; box-shadow: 0 2px 10px rgba(99,102,241,.4); }
+
+/* Controls */
+.controls { display: flex; gap: 12px; align-items: center; padding-top: 8px; }
+.ctrl-btn {
+  padding: 13px 28px; border-radius: 12px; border: none;
+  font-size: 15px; font-weight: 600; font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: .25s; display: inline-flex; align-items: center; gap: 8px;
+}
+.ctrl-prev { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); }
+.ctrl-prev:hover { background: rgba(255,255,255,.12); }
+.ctrl-next { background: var(--accent); color: #fff; box-shadow: 0 5px 20px rgba(99,102,241,.35); }
+.ctrl-next:hover { background: #5558e3; transform: translateY(-1px); }
+.ctrl-next:disabled { opacity: .35; pointer-events: none; }
+.ctrl-submit { background: linear-gradient(135deg, #10b981, #059669); color: #fff; box-shadow: 0 5px 20px rgba(16,185,129,.35); }
+.ctrl-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(16,185,129,.45); }
+.hint-txt { margin-left: auto; font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+/* ══════════════════════════════════════
+   WARNING OVERLAY
+══════════════════════════════════════ */
+#warnOverlay {
+  display: none; position: fixed; inset: 0; z-index: 500;
+  background: rgba(239,68,68,.12); backdrop-filter: blur(10px);
+  align-items: center; justify-content: center;
+}
+#warnOverlay.show { display: flex; }
+.warn-card {
+  background: #120808; border: 2px solid rgba(239,68,68,.6);
+  border-radius: 24px; padding: 40px 36px;
+  text-align: center; max-width: 440px; width: 90%;
+  box-shadow: 0 30px 60px rgba(0,0,0,.7), 0 0 60px rgba(239,68,68,.2);
+  animation: warnPop .35s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes warnPop { from { opacity: 0; transform: scale(.88) translateY(-10px); } to { opacity: 1; transform: none; } }
+.warn-emo { font-size: 52px; display: block; margin-bottom: 8px; }
+.warn-card h2 { font-family: 'Syne', sans-serif; font-size: 22px; color: #fca5a5; margin-bottom: 6px; }
+.warn-count-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 72px; font-weight: 700;
+  color: var(--red); line-height: 1; margin: 10px 0;
+  text-shadow: 0 0 30px rgba(239,68,68,.5);
+}
+.warn-msg { color: var(--muted); font-size: 14px; margin-bottom: 14px; line-height: 1.5; }
+.warn-meta {
+  background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+  font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #fca5a5;
+}
+#warnDetailBox {
+  background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.15);
+  border-radius: 10px; padding: 12px; margin-bottom: 14px;
+  font-size: 12px; color: #fca5a5; text-align: left; display: none;
+}
+.warn-dismiss {
+  width: 100%; padding: 13px; background: var(--red); color: #fff;
+  border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
+  font-family: 'Syne', sans-serif; cursor: pointer; transition: .2s;
+}
+.warn-dismiss:hover { background: #dc2626; transform: translateY(-1px); }
+.warn-dismiss:disabled { opacity: .5; pointer-events: none; }
+
+/* Flash banner */
+#flashBanner {
+  position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 400; display: none;
+  background: rgba(239,68,68,.96); color: #fff;
+  padding: 10px 24px; border-radius: 10px;
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  text-align: center; white-space: nowrap;
+  box-shadow: 0 6px 24px rgba(239,68,68,.5);
+  animation: flashIn .25s cubic-bezier(.16,1,.3,1);
+}
+@keyframes flashIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* Auto-submit countdown */
+#autoSubmitOverlay {
+  display: none; position: fixed; inset: 0; z-index: 600;
+  background: rgba(0,0,0,.92); align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+}
+#autoSubmitOverlay.show { display: flex; }
+.as-title { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; color: var(--red); }
+.as-num { font-family: 'JetBrains Mono', monospace; font-size: 80px; font-weight: 700; color: var(--red); text-shadow: 0 0 40px rgba(239,68,68,.6); }
+.as-sub { color: var(--muted); font-size: 16px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     FULLSCREEN GATE
+══════════════════════════════════════ -->
+<div id="fsGate">
+  <div class="gate-card">
+    <span class="gate-icon">🖥️</span>
+    <div class="gate-brand">SmartExam Pro · Secure Environment</div>
+    <h1>Fullscreen Required</h1>
+    <p>This exam must run in fullscreen mode with AI proctoring active. Exiting fullscreen will log a violation.</p>
+    <div class="gate-rules">
+      <div class="gate-rule"><span>📷</span><span>Camera &amp; mic will be active throughout</span></div>
+      <div class="gate-rule"><span>👤</span><span>Only 1 face allowed — multiple faces = violation</span></div>
+      <div class="gate-rule"><span>📱</span><span>No phones, books, or devices in frame</span></div>
+      <div class="gate-rule"><span>🚫</span><span>Tab switching causes immediate warning</span></div>
+      <div class="gate-rule"><span>⚠️</span><span>3 violations = automatic exam submission</span></div>
+    </div>
+    <button class="fs-btn" id="fsBtn" onclick="enterFullscreen()">🚀 Enter Fullscreen &amp; Begin Exam</button>
+    <p id="fsGateError"></p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     MAIN EXAM
+══════════════════════════════════════ -->
+<div id="examMain">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-logo">🎓</div>
+    SmartExam Pro
+    <div class="live-dot"></div>
+  </div>
+  <div class="timer-wrap" id="timerWrap">
+    <span style="font-size:14px">⏱</span>
+    <span class="timer-val" id="timerVal">10:00</span>
+  </div>
+  <div class="warn-pill" id="warnPill">⚠ 0 / 3 Warnings</div>
+  <div class="status-row">
+    <div class="sp loading" id="spCam"><div class="sp-dot"></div>Cam</div>
+    <div class="sp loading" id="spMic"><div class="sp-dot"></div>Mic</div>
+    <div class="sp loading" id="spAI"><div class="sp-dot"></div>AI</div>
+    <div class="sp loading" id="spFS"><div class="sp-dot"></div>Full</div>
+  </div>
+  <button class="btn-theme" id="themeBtn" onclick="toggleTheme()">🌙</button>
+</div>
+
+<div class="exam-body">
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-inner">
+
+    <!-- Camera -->
+    <div class="sec-lbl">📷 Live Proctoring</div>
+    <div class="cam-wrap" id="camWrap">
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="faceCanvas" class="cam-canvas"></canvas>
+      <div class="cam-warn-banner" id="camWarnBanner">⚠ VIOLATION<br>DETECTED</div>
+      <div class="cam-badge" id="camBadge"><span id="camBadgeDot" style="width:6px;height:6px;border-radius:50%;background:#f59e0b;animation:livePulse 1s infinite;flex-shrink:0"></span><span id="camBadgeTxt">Initializing…</span></div>
+    </div>
+
+    <!-- AI Proctoring -->
+    <div class="ai-box">
+      <div class="sec-lbl" style="margin-bottom:6px">🤖 AI Proctoring</div>
+      <div class="ai-row"><span class="ai-lbl">Face Detection</span><span class="ai-val loading" id="aiFace">Loading…</span></div>
+      <div class="ai-row"><span class="ai-lbl">Object Scan</span><span class="ai-val loading" id="aiObj">Loading…</span></div>
+      <div class="ai-row"><span class="ai-lbl">Audio</span><span class="ai-val loading" id="aiAudio">Loading…</span></div>
+      <div class="ai-row"><span class="ai-lbl">Gaze Track</span><span class="ai-val loading" id="aiGaze">Loading…</span></div>
+      <div class="ai-row"><span class="ai-lbl">Fullscreen</span><span class="ai-val ok" id="aiFS">Active ✓</span></div>
+      <div class="ai-row"><span class="ai-lbl">Tab Guard</span><span class="ai-val ok" id="aiTab">Watching ✓</span></div>
+    </div>
+
+    <!-- Progress -->
+    <div class="prog-wrap">
+      <div class="sec-lbl">📊 Progress</div>
+      <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-text" id="progText">1 / 10</div>
+    </div>
+
+    <!-- Navigator -->
+    <div class="nav-box">
+      <div class="sec-lbl">🗂 Questions</div>
+      <div class="nav-grid" id="navGrid"></div>
+    </div>
+
+    <!-- Violation log -->
+    <div class="vlog">
+      <div class="sec-lbl">📋 Activity Log</div>
+      <div class="vlog-list" id="vlogList"><div style="color:var(--muted);font-size:10px;padding:4px 0">No events yet…</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- EXAM QUESTIONS -->
+<div class="exam-area" id="examArea">
+  <form id="examForm" action="/submit_exam" method="POST">
+    <input type="hidden" name="violations" id="violationsInput" value="0">
+
+    {% for q in questions %}
+    <div class="qcard {% if loop.first %}active{% endif %}" id="qcard{{ loop.index0 }}">
+      <div class="q-header">
+        <div class="q-tag">Question {{ loop.index }} of {{ questions|length }}</div>
+        <div class="q-title">{{ q.text }}</div>
+      </div>
+      <div class="q-wrap">
+        <div class="options">
+          {% for key, val in q.options.items() %}
+          <label class="opt" onclick="selectOpt(this, '{{q.id}}', '{{key}}')">
+            <input type="radio" name="{{ q.id }}" value="{{ key }}">
+            <div class="opt-key">{{ key.upper() }}</div>
+            <span>{{ val }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="controls">
+        <button type="button" class="ctrl-btn ctrl-prev" id="prevBtn{{ loop.index0 }}" onclick="prevQ()" {% if loop.first %}style="display:none"{% endif %}>← Prev</button>
+        <button type="button" class="ctrl-btn ctrl-next" id="nextBtn{{ loop.index0 }}" onclick="nextQ()" disabled {% if loop.last %}style="display:none"{% endif %}>Next →</button>
+        <button type="submit" class="ctrl-btn ctrl-submit" id="subBtn{{ loop.index0 }}" {% if not loop.last %}style="display:none"{% endif %}>✅ Submit Exam</button>
+        <span class="hint-txt" id="hint{{ loop.index0 }}">Select an answer to continue</span>
+      </div>
+    </div>
+    {% endfor %}
+  </form>
+</div>
+
+</div><!-- end exam-body -->
+</div><!-- end examMain -->
+
+<!-- ══════════════════════════════════════
+     WARNING OVERLAY
+══════════════════════════════════════ -->
+<div id="warnOverlay">
+  <div class="warn-card">
+    <span class="warn-emo" id="warnEmo">⚠️</span>
+    <h2 id="warnTitle">Violation Detected</h2>
+    <div class="warn-count-num" id="warnNum">1</div>
+    <div class="warn-msg" id="warnMsg">Suspicious activity detected.</div>
+    <div class="warn-meta">Warning <strong><span id="warnCurr">1</span> of 3</strong> — Third warning triggers automatic submission</div>
+    <div id="warnDetailBox"></div>
+    <button class="warn-dismiss" id="warnDismissBtn" onclick="dismissWarning()">✓ I Understand — Continue Exam</button>
+  </div>
+</div>
+
+<!-- FLASH BANNER -->
+<div id="flashBanner"></div>
+
+<!-- AUTO-SUBMIT OVERLAY -->
+<div id="autoSubmitOverlay">
+  <div class="as-title">⚠ Auto-Submitting Exam</div>
+  <div class="as-num" id="asCountdown">3</div>
+  <div class="as-sub" id="asReason">Maximum violations reached.</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+const TOTAL_Q = {{ questions|length }};
+const EXAM_SECONDS = 600; // 10 minutes
+let curQ = 0;
+let warnings = 0;
+let timeLeft = EXAM_SECONDS;
+let timerID = null;
+let examStarted = false;
+let isSubmitting = false;
+let violationsCount = 0;
+let video = null;
+let cocoModel = null;
+let noFaceCount = 0;
+let objCooldown = {};
+let micStream = null;
+let audioCtx = null;
+let multiFaceCooldown = false;
+let multiFaceFrames = 0;
+let warnCooldown = false; // global brief cooldown to prevent stacking
+
+/* ══════════════════════════════════════
+   FULLSCREEN
+══════════════════════════════════════ */
+function enterFullscreen() {
+  const btn = document.getElementById('fsBtn');
+  btn.textContent = 'Requesting fullscreen…';
+  btn.disabled = true;
+
+  document.documentElement.requestFullscreen()
+    .then(() => {
+      document.getElementById('fsGate').style.display = 'none';
+      const main = document.getElementById('examMain');
+      main.style.display = 'flex';
+      main.style.flexDirection = 'column';
+      main.style.height = '100%';
+      setStatus('spFS', 'on', 'Full ✓');
+      initExam();
+    })
+    .catch(err => {
+      btn.textContent = '🚀 Enter Fullscreen & Begin Exam';
+      btn.disabled = false;
+      const errEl = document.getElementById('fsGateError');
+      errEl.style.display = 'block';
+      errEl.textContent = 'Fullscreen denied: ' + err.message + '. Please allow fullscreen access.';
+    });
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (!examStarted || isSubmitting) return;
+  if (!document.fullscreenElement) {
+    setStatus('spFS', 'off', 'Exited!');
+    document.getElementById('aiFS').textContent = 'EXITED ✗';
+    document.getElementById('aiFS').className = 'ai-val bad';
+    showFlash('🚨 FULLSCREEN EXITED — VIOLATION LOGGED', 4000);
+    giveWarning('fullscreen', 'Fullscreen exited — exam rules violated', '🖥️', 'Fullscreen Violation',
+      'You have exited fullscreen mode. This is a violation of exam rules. Re-entering fullscreen is required. Repeated violations will result in automatic submission.');
+    // Re-request fullscreen after dismiss
+    setTimeout(() => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          setStatus('spFS', 'on', 'Full ✓');
+          document.getElementById('aiFS').textContent = 'Active ✓';
+          document.getElementById('aiFS').className = 'ai-val ok';
+        }).catch(() => {});
+      }
+    }, 3000);
+  }
+});
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+function isVideoReady() {
+  return video && video.videoWidth > 0 && video.readyState >= 2;
+}
+
+async function initExam() {
+  video = document.getElementById('webcam');
+  buildNav();
+  showQ(0);
+  setupSecurity();
+  startTimer();
+  await startCamera();
+  await startMic();
+  // Enable proctoring loops as soon as camera/mic are live (don't wait for AI weights)
+  examStarted = true;
+  await loadAI();
+}
+
+/* ══════════════════════════════════════
+   TIMER — fixed, counts from 10:00
+══════════════════════════════════════ */
+function startTimer() {
+  const valEl = document.getElementById('timerVal');
+  const wrap = document.getElementById('timerWrap');
+
+  function tick() {
+    const m = Math.floor(timeLeft / 60);
+    const s = timeLeft % 60;
+    valEl.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+    if (timeLeft <= 30) {
+      wrap.classList.add('critical');
+    } else {
+      wrap.classList.remove('critical');
+    }
+
+    if (timeLeft <= 0) {
+      clearInterval(timerID);
+      logEvent('Timer expired — auto submit');
+      triggerAutoSubmit('Time expired', 'Your exam time has run out. Submitting now…');
+      return;
+    }
+    timeLeft--;
+  }
+
+  tick(); // immediate first tick
+  timerID = setInterval(tick, 1000);
+}
+
+/* ══════════════════════════════════════
+   CAMERA
+══════════════════════════════════════ */
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+    });
+    video = document.getElementById('webcam');
+    video.srcObject = stream;
+    await new Promise(resolve => { video.onloadedmetadata = resolve; });
+    // Explicitly play and wait — required in some browsers
+    try { await video.play(); } catch(e) { console.warn('video.play():', e); }
+    setStatus('spCam', 'on', 'Cam ✓');
+    setCamBadge('🟡', 'AI loading…');
+  } catch (err) {
+    console.error("CAMERA ERROR:", err);
+    setStatus('spCam', 'off', 'Cam ✗');
+    setCamBadge('🔴', '❌ Camera denied');
+    document.getElementById('aiFace').textContent = '❌ No camera';
+    document.getElementById('aiFace').className = 'ai-val bad';
+    document.getElementById('aiObj').textContent = '❌ No camera';
+    document.getElementById('aiObj').className = 'ai-val bad';
+  }
+}
+
+/* ══════════════════════════════════════
+   MICROPHONE
+══════════════════════════════════════ */
+async function startMic() {
+
+  try {
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+
+    setStatus('spMic', 'on', 'Mic ✓');
+
+    document.getElementById('aiAudio').textContent = '✅ Silent';
+    document.getElementById('aiAudio').className = 'ai-val ok';
+
+    monitorAudio(micStream);
+
+  } catch (err) {
+
+    console.error("MIC ERROR:", err);
+
+    setStatus('spMic', 'off', 'Mic ✗');
+
+    document.getElementById('aiAudio').textContent = '❌ Mic blocked';
+    document.getElementById('aiAudio').className = 'ai-val bad';
+
+  }
+}
+
+/* ── AUDIO MONITOR ── */
+function monitorAudio(stream) {
+  try {
+    // AudioContext must be created/resumed after a user gesture.
+    // By the time monitorAudio is called the user has already clicked
+    // "Enter Fullscreen", so this is safe. We also call resume() just in case.
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const resumeAudio = () => {
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    };
+    resumeAudio();
+
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.3;
+    source.connect(analyser);
+
+    const dataArray = new Uint8Array(analyser.fftSize);
+    const audioEl = document.getElementById('aiAudio');
+
+    // Track sustained loud audio
+    let loudFrames = 0;
+    let audioCooldown = false;
+    const LOUD_THRESHOLD = 12;      // RMS threshold (0–128 scale); lower = more sensitive
+    const SUSTAINED_FRAMES = 5;     // frames at 200ms = ~1s sustained
+    const COOLDOWN_MS = 12000;
+
+    setInterval(() => {
+      if (!examStarted || isSubmitting) return;
+      resumeAudio();
+
+      analyser.getByteTimeDomainData(dataArray);
+
+      // Calculate RMS
+      let sumSq = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = (dataArray[i] - 128);
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / dataArray.length);
+
+      if (rms > LOUD_THRESHOLD) {
+        loudFrames++;
+        const level = rms < 45 ? 'low' : rms < 70 ? 'medium' : 'high';
+        audioEl.textContent = `🔊 Noise (${level})`;
+        audioEl.className = 'ai-val warn';
+
+        if (loudFrames >= SUSTAINED_FRAMES && !audioCooldown) {
+          audioCooldown = true;
+          loudFrames = 0;
+          showFlash('🔊 NOISE DETECTED — Maintain silence!', 3000);
+          giveWarning(
+            'audio',
+            'Sustained noise detected from your microphone. Please maintain exam silence.',
+            '🔊',
+            'Noise Detected!',
+            `⚠ Our system detected sustained audio/talking from your microphone. The exam must be taken in silence. Speaking or allowing background noise is a violation. RMS level: ${Math.round(rms)}`
+          );
+          setTimeout(() => { audioCooldown = false; }, COOLDOWN_MS);
+        }
+      } else {
+        loudFrames = Math.max(0, loudFrames - 1); // decay
+        audioEl.textContent = '✅ Silent';
+        audioEl.className = 'ai-val ok';
+      }
+    }, 200);
+
+  } catch (err) {
+    console.error('Audio monitor error:', err);
+    document.getElementById('aiAudio').textContent = '⚠ Monitor fail';
+    document.getElementById('aiAudio').className = 'ai-val warn';
+  }
+}
+
+/* ══════════════════════════════════════
+   AI — FACE + OBJECT
+══════════════════════════════════════ */
+async function loadAI() {
+  document.getElementById('aiFace').textContent = 'Loading…';
+  document.getElementById('aiFace').className = 'ai-val loading';
+  document.getElementById('aiObj').textContent = 'Loading…';
+  document.getElementById('aiObj').className = 'ai-val loading';
+
+  // Force TF to use WebGL or CPU backend cleanly
+  try {
+    await tf.setBackend('webgl');
+    await tf.ready();
+  } catch(e) {
+    try { await tf.setBackend('cpu'); await tf.ready(); } catch(e2) {}
+  }
+
+  // Load face-api models (local first, CDN fallback)
+  let faceLoaded = false;
+  let landmarkLoaded = false;
+  const MODEL_URLS = [
+    '/static/models',
+    'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model'
+  ];
+
+  async function loadNet(net, label) {
+    let lastErr = null;
+    for (const base of MODEL_URLS) {
+      try {
+        await net.loadFromUri(base);
+        console.log(label + ' loaded from', base);
+        return true;
+      } catch (e) {
+        lastErr = e;
+        console.warn(label + ' failed from', base, e);
+      }
+    }
+    throw lastErr || new Error(label + ' load failed');
+  }
+
+  try {
+    await loadNet(faceapi.nets.tinyFaceDetector, 'TinyFaceDetector');
+    faceLoaded = true;
+    document.getElementById('aiFace').textContent = '✅ Ready';
+    document.getElementById('aiFace').className = 'ai-val ok';
+  } catch (e) {
+    console.error('Face model load error:', e);
+    document.getElementById('aiFace').textContent = '⚠ Load fail';
+    document.getElementById('aiFace').className = 'ai-val warn';
+  }
+
+  document.getElementById('aiGaze').textContent = 'Loading…';
+  document.getElementById('aiGaze').className = 'ai-val loading';
+  try {
+    await loadNet(faceapi.nets.faceLandmark68Net, 'FaceLandmark68');
+    landmarkLoaded = true;
+    document.getElementById('aiGaze').textContent = '✅ Ready';
+    document.getElementById('aiGaze').className = 'ai-val ok';
+  } catch (e) {
+    console.error('Landmark model load error:', e);
+    document.getElementById('aiGaze').textContent = '⚠ Load fail';
+    document.getElementById('aiGaze').className = 'ai-val warn';
+  }
+
+  // Load COCO-SSD
+  let cocoLoaded = false;
+  try {
+    cocoModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    console.log("COCO SSD loaded");
+    cocoLoaded = true;
+    document.getElementById('aiObj').textContent = '✅ Ready';
+    document.getElementById('aiObj').className = 'ai-val ok';
+  } catch (e) {
+    console.error("COCO ERROR:", e);
+    document.getElementById('aiObj').textContent = '⚠ Load fail';
+    document.getElementById('aiObj').className = 'ai-val warn';
+  }
+
+  if (faceLoaded || cocoLoaded) {
+    setStatus('spAI', 'on', 'AI ✓');
+  }
+
+  if (faceLoaded) runFaceDetection(landmarkLoaded);
+  if (cocoLoaded) runObjectDetection();
+}
+
+/* ── FACE DETECTION + GAZE TRACKING ── */
+function runFaceDetection(withLandmarks) {
+  const canvas = document.getElementById('faceCanvas');
+
+  // Gaze state
+  let gazeAwayFrames = 0;
+  let gazeWarningCooldown = false;
+  const GAZE_AWAY_THRESHOLD = 5;   // ~3.5s at 700ms intervals — looking away sustained
+  const GAZE_COOLDOWN_MS = 15000;
+
+  function getLandmarkPoints(landmarks) {
+    if (!landmarks) return [];
+    if (landmarks.positions && landmarks.positions.length >= 68) return landmarks.positions;
+    if (typeof landmarks.getPositions === 'function') {
+      const p = landmarks.getPositions();
+      if (p && p.length >= 68) return p;
+    }
+    if (Array.isArray(landmarks) && landmarks.length >= 68) return landmarks;
+    return [];
+  }
+
+  function estimateGaze(landmarks) {
+    const pts = getLandmarkPoints(landmarks);
+    if (!pts || pts.length < 68) return { direction: 'center', h: '0', v: '0' };
+    // 68-point model: nose tip=30, left eye=36-39, right eye=42-45, chin=8
+    const noseTip  = pts[30];
+    const leftEye  = { x: (pts[36].x+pts[39].x)/2, y: (pts[36].y+pts[39].y)/2 };
+    const rightEye = { x: (pts[42].x+pts[45].x)/2, y: (pts[42].y+pts[45].y)/2 };
+    const eyeCenter= { x: (leftEye.x+rightEye.x)/2, y: (leftEye.y+rightEye.y)/2 };
+    const faceWidth = Math.abs(pts[16].x - pts[0].x) || 1;
+    const faceHeight= Math.abs(pts[8].y  - pts[27].y) || 1;
+    const horizRatio = (noseTip.x - eyeCenter.x) / faceWidth;
+    const vertRatio  = (noseTip.y - eyeCenter.y) / faceHeight;
+    const H = 0.08, V_DOWN = 0.38, V_UP = 0.18;
+    let dir = 'center';
+    if      (horizRatio < -H)    dir = 'left';
+    else if (horizRatio >  H)    dir = 'right';
+    else if (vertRatio  <  V_UP) dir = 'up';
+    else if (vertRatio  >  V_DOWN) dir = 'down';
+    return { direction: dir, h: horizRatio.toFixed(3), v: vertRatio.toFixed(3) };
+  }
+
+  setInterval(async () => {
+    if (!examStarted || !isVideoReady()) return;
+    try {
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.25 });
+      const rawDets = withLandmarks
+        ? await faceapi.detectAllFaces(video, options).withFaceLandmarks()
+        : await faceapi.detectAllFaces(video, options);
+
+      // Normalize results into a consistent shape:
+      // Each entry: { box: {x,y,width,height}, landmarks: obj|null }
+      // face-api withLandmarks() returns [{detection: FaceDetection, landmarks: FaceLandmarks68}, ...]
+      // without landmarks returns [FaceDetection, ...]
+      // FaceDetection.box is the bounding box
+      const dets = withLandmarks
+        ? rawDets.map(r => ({ box: r.detection.box, landmarks: r.landmarks }))
+        : rawDets.map(r => ({ box: r.box, landmarks: null }));
+
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 240;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const faceEl = document.getElementById('aiFace');
+      const camWarn = document.getElementById('camWarnBanner');
+
+      if (dets.length === 0) {
+        noFaceCount++;
+
+        // ── CAMERA COVERED / BLOCKED DETECTION ──
+        // Sample a grid of pixels from the video frame to detect a blocked/covered camera
+        let isCovered = false;
+        try {
+          const sampleCanvas = document.createElement('canvas');
+          sampleCanvas.width = 32; sampleCanvas.height = 32;
+          const sCtx = sampleCanvas.getContext('2d');
+          sCtx.drawImage(video, 0, 0, 32, 32);
+          const pixels = sCtx.getImageData(0, 0, 32, 32).data;
+          let totalBrightness = 0;
+          let uniformPixels = 0;
+          const pixelCount = pixels.length / 4;
+          for (let p = 0; p < pixels.length; p += 4) {
+            const r = pixels[p], g = pixels[p+1], b = pixels[p+2];
+            const brightness = (r + g + b) / 3;
+            totalBrightness += brightness;
+            // Count near-black or near-uniform pixels
+            if (brightness < 15) uniformPixels++;
+          }
+          const avgBrightness = totalBrightness / pixelCount;
+          const darkRatio = uniformPixels / pixelCount;
+          // If avg brightness is very low OR >75% pixels are near-black → covered
+          isCovered = avgBrightness < 18 || darkRatio > 0.75;
+        } catch(e) {}
+
+        if (isCovered) {
+          faceEl.textContent = '🚫 Camera blocked!';
+          faceEl.className = 'ai-val bad';
+          setCamBadge('🔴', '🚫 Camera appears blocked/covered!');
+          document.getElementById('camWrap').classList.add('danger');
+          document.getElementById('camWrap').classList.remove('warning-state');
+          camWarn.style.display = 'flex';
+          showFlash('🚫 CAMERA BLOCKED — Uncover your camera immediately!', 4000);
+          if (!window._coveredCooldown) {
+            window._coveredCooldown = true;
+            giveWarning('face', 'Camera appears to be covered or blocked. Uncover your camera immediately.', '🚫', 'Camera Blocked!',
+              '⚠ Our system detected that your camera feed is blocked or covered. This is a serious violation. Uncover your camera immediately. Continued blocking will result in automatic submission.');
+            logViolation('Camera covered/blocked detected', 'vi-face');
+            setTimeout(() => { window._coveredCooldown = false; }, 15000);
+          }
+        } else {
+          faceEl.textContent = `❌ No face (${noFaceCount})`;
+          faceEl.className = 'ai-val bad';
+          setCamBadge('🟡', '⚠ No face detected');
+          document.getElementById('camWrap').classList.add('warning-state');
+          document.getElementById('camWrap').classList.remove('danger');
+          camWarn.style.display = 'none';
+        }
+
+        if (noFaceCount === 5) {
+          giveWarning('face', 'No face detected in camera frame. Ensure your face is visible.', '😶', 'Face Not Detected',
+            'Your face must remain visible on camera throughout the exam. Please position yourself in front of the camera.');
+        }
+        if (noFaceCount >= 20) {
+          triggerAutoSubmit('Face absent too long', 'Student left the camera for an extended period.');
+        }
+
+      } else if (dets.length > 1) {
+        noFaceCount = 0;
+        faceEl.textContent = `🚨 ${dets.length} faces!`;
+        faceEl.className = 'ai-val bad';
+        setCamBadge('🔴', `🚨 ${dets.length} faces — VIOLATION`);
+        document.getElementById('camWrap').classList.add('danger');
+        document.getElementById('camWrap').classList.remove('warning-state');
+        camWarn.style.display = 'flex';
+
+        // Draw ALL face boxes
+        dets.forEach((d, i) => {
+          const b = d.box;
+          ctx.strokeStyle = i === 0 ? '#f59e0b' : '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.shadowBlur = 10;
+          ctx.strokeRect(b.x, b.y, b.width, b.height);
+          ctx.shadowBlur = 0;
+          // label
+          const label = i === 0 ? 'STUDENT' : `EXTRA ${i}`;
+          const lw = ctx.measureText(label).width + 14;
+          ctx.fillStyle = i === 0 ? 'rgba(245,158,11,.9)' : 'rgba(239,68,68,.9)';
+          let labelY = b.y - 22;
+
+if (labelY < 0) {
+  labelY = b.y + b.height + 5;
+}
+
+ctx.fillRect(b.x, labelY, lw, 20);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(label, b.x + 7, labelY + 14);
+        });
+
+        multiFaceFrames++;
+
+        if (multiFaceFrames >= 2 && !multiFaceCooldown) {
+          multiFaceCooldown = true;
+          multiFaceFrames = 0;
+          showFlash(`🚨 ${dets.length} FACES DETECTED — VIOLATION!`, 3500);
+          giveWarning('face', `${dets.length} people detected in frame. Only 1 student allowed during exam.`, '👥', 'Multiple Faces Detected!',
+            `⚠ Our AI detected ${dets.length} faces in your camera. Only the registered student may be present. Remove any additional persons immediately. This violation has been logged.`);
+          setTimeout(() => { multiFaceCooldown = false; }, 10000);
+        }
+
+      } else {
+        noFaceCount = 0;
+        multiFaceCooldown = false;
+        multiFaceFrames = 0;
+        faceEl.textContent = '✅ 1 face OK';
+        faceEl.className = 'ai-val ok';
+        setCamBadge('🟢', '✅ Face verified');
+        document.getElementById('camWrap').classList.remove('danger', 'warning-state');
+        camWarn.style.display = 'none';
+
+        // Green verified box
+        const b = dets[0].box;
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#10b981';
+        ctx.shadowBlur = 8;
+        ctx.strokeRect(b.x, b.y, b.width, b.height);
+        ctx.shadowBlur = 0;
+        const verifyLbl = 'VERIFIED ✓';
+        const lw2 = ctx.measureText(verifyLbl).width + 14;
+        ctx.fillStyle = 'rgba(16,185,129,.88)';
+        ctx.fillRect(b.x, b.y > 20 ? b.y - 20 : b.y + b.height, lw2, 18);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(verifyLbl, b.x + 7, (b.y > 20 ? b.y - 20 : b.y + b.height) + 12);
+
+        // ── GAZE TRACKING ──
+        const gazeEl = document.getElementById('aiGaze');
+        if (withLandmarks && dets[0].landmarks) {
+          const gaze = estimateGaze(dets[0].landmarks);
+          if (gaze.direction !== 'center') {
+            gazeAwayFrames++;
+            gazeEl.textContent = '👁️ Looking ' + gaze.direction;
+            gazeEl.className = gazeAwayFrames >= 4 ? 'ai-val bad' : 'ai-val warn';
+            // Draw direction arrow
+            const cx = b.x + b.width/2, cy = b.y + b.height/2;
+            const arrowMap = { left:[-1,0], right:[1,0], down:[0,1], up:[0,-1] };
+            const [dx, dy] = arrowMap[gaze.direction] || [0,0];
+            ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3;
+            ctx.shadowColor='#f59e0b'; ctx.shadowBlur=12;
+            ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+dx*40,cy+dy*40); ctx.stroke();
+            ctx.shadowBlur=0; ctx.fillStyle='#f59e0b';
+            const ang=Math.atan2(dy,dx);
+            ctx.beginPath();
+            ctx.moveTo(cx+dx*40,cy+dy*40);
+            ctx.lineTo(cx+dx*40-10*Math.cos(ang-0.4),cy+dy*40-10*Math.sin(ang-0.4));
+            ctx.lineTo(cx+dx*40-10*Math.cos(ang+0.4),cy+dy*40-10*Math.sin(ang+0.4));
+            ctx.closePath(); ctx.fill();
+            if (gazeAwayFrames>=GAZE_AWAY_THRESHOLD && !gazeWarningCooldown) {
+              gazeWarningCooldown=true;
+              showFlash('👁️ LOOKING '+gaze.direction.toUpperCase()+' — Keep eyes on screen!', 3500);
+              giveWarning('face','Gaze away: '+gaze.direction+' for extended period.','👁️','Gaze Violation!',
+                '⚠ AI detected you looking '+gaze.direction+' from screen repeatedly. Eyes must stay on screen. Logged.');
+              logViolation('Gaze away ('+gaze.direction+') x'+gazeAwayFrames+' frames','vi-face');
+              setTimeout(function(){ gazeWarningCooldown=false; gazeAwayFrames=0; }, GAZE_COOLDOWN_MS);
+            }
+          } else {
+            gazeAwayFrames=Math.max(0,gazeAwayFrames-1);
+            gazeEl.textContent='✅ On screen';
+            gazeEl.className='ai-val ok';
+          }
+        } else if (!withLandmarks) {
+          gazeEl.textContent='⚠ No landmark model';
+          gazeEl.className='ai-val warn';
+        }
+      }
+    } catch (err) { console.error('Face loop err:',err); }
+  }, 700);
+}
+
+/* ── OBJECT DETECTION ── */
+function runObjectDetection() {
+  const BANNED = {
+    'cell phone':  { icon: '📱', name: 'Mobile Phone',  msg: 'Mobile phone detected in camera! Put it away immediately — phones are strictly prohibited during the exam.' },
+    'book':        { icon: '📖', name: 'Book/Notes',    msg: 'Book or study material detected! Remove all physical materials from your desk and camera view.' },
+    'laptop':      { icon: '💻', name: 'Laptop/Screen', msg: 'Secondary laptop or screen detected in frame! Only your exam device is permitted.' },
+    'tablet':      { icon: '📱', name: 'Tablet/iPad',   msg: 'Tablet detected in frame! Remove all secondary devices.' },
+    'remote':      { icon: '📡', name: 'Remote/Device', msg: 'Unrecognized electronic device detected. Remove it from camera view.' },
+    'mouse':       { icon: '🖱', name: 'Ext. Mouse',    msg: 'External mouse detected in unusual position.' },
+    'keyboard':    { icon: '⌨️', name: 'Ext. Keyboard', msg: 'External keyboard detected. Remove all secondary input devices.' },
+    'tv':          { icon: '📺', name: 'TV/Monitor',    msg: 'Additional screen detected in frame. Only your exam screen is permitted.' },
+    'monitor':     { icon: '🖥️', name: 'Monitor',       msg: 'Additional monitor detected in frame. Remove all secondary displays.' },
+    'scissors':    { icon: '✂️', name: 'Scissors',      msg: 'Prohibited item detected in camera view.' },
+    'knife':       { icon: '🔪', name: 'Sharp Object',  msg: 'Prohibited item detected in camera view.' },
+  };
+  let detectingObjects = false;
+  const OBJ_THRESHOLD = 0.38; // slightly lower than 0.42 to catch more true positives
+
+  setInterval(async () => {
+
+    if (detectingObjects) return;
+
+    if (!examStarted || !cocoModel || !isVideoReady()) return;
+
+    detectingObjects = true;
+    try {
+      const preds = await cocoModel.detect(video, 10);
+      const objEl = document.getElementById('aiObj');
+      let found = null;
+
+      for (const p of preds) {
+        if (BANNED[p.class] && p.score > OBJ_THRESHOLD) { found = { ...BANNED[p.class], cls: p.class }; break; }
+      }
+
+      if (found) {
+        objEl.textContent = `⚠ ${found.icon} ${found.name}`;
+        objEl.className = 'ai-val bad';
+        showFlash(`${found.icon} ${found.name.toUpperCase()} DETECTED!`, 3000);
+        if (!objCooldown[found.cls]) {
+          objCooldown[found.cls] = true;
+          giveWarning('obj', found.msg, found.icon, `${found.name} Detected!`, null);
+          setTimeout(() => { delete objCooldown[found.cls]; }, 10000);
+        }
+      } else {
+        objEl.textContent = '✅ Clear';
+        objEl.className = 'ai-val ok';
+      }
+    } catch (err) {
+    console.error("OBJECT DETECTION ERROR:", err);
+} finally {
+    detectingObjects = false;
+}
+  }, 2500);
+}
+
+/* ══════════════════════════════════════
+   SECURITY
+══════════════════════════════════════ */
+function setupSecurity() {
+  // ── BLOCK BROWSER BACK BUTTON ──
+  // Push a dummy state so back goes to it, then push again to stay
+  history.pushState({ examPage: true }, '', window.location.href);
+  history.pushState({ examPage: true }, '', window.location.href);
+  window.addEventListener('popstate', (e) => {
+    // Always re-push so the user can't navigate away
+    history.pushState({ examPage: true }, '', window.location.href);
+    if (examStarted && !isSubmitting) {
+      showFlash('🚫 BACK NAVIGATION BLOCKED — Submit exam to exit', 3500);
+      logEvent('[SECURITY] Browser back button pressed — blocked');
+      logViolation('Browser back button attempt blocked', 'vi-tab');
+    }
+  });
+
+  document.addEventListener('contextmenu', e => { e.preventDefault(); giveWarning('tab', 'Right-click menu attempt blocked.', '🚫', 'Shortcut Blocked', null); });
+  document.addEventListener('copy',  e => { e.preventDefault(); });
+  document.addEventListener('paste', e => { e.preventDefault(); });
+  document.addEventListener('cut',   e => { e.preventDefault(); });
+
+  document.addEventListener('keydown', e => {
+    const blocked = ['c','v','x','u','a','s','p','i','j','r','n','t','w'];
+    if ((e.ctrlKey || e.metaKey) && blocked.includes(e.key.toLowerCase())) {
+      e.preventDefault();
+      giveWarning('tab', `Keyboard shortcut Ctrl+${e.key.toUpperCase()} blocked.`, '⌨️', 'Shortcut Blocked', null);
+    }
+    if (e.key === 'F12' || e.key === 'F5' || (e.ctrlKey && e.shiftKey)) {
+      e.preventDefault();
+      giveWarning('tab', 'Developer tools shortcut blocked.', '🚫', 'DevTools Blocked', null);
+    }
+    if (e.key === 'Escape' && examStarted) {
+      e.preventDefault();
+    }
+    if (e.key === 'PrintScreen') {
+      e.preventDefault();
+      giveWarning('tab', 'Screenshot attempt detected and blocked.', '📸', 'Screenshot Blocked', null);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && examStarted && !isSubmitting) {
+      document.getElementById('aiTab').textContent = 'Tab switch ✗';
+      document.getElementById('aiTab').className = 'ai-val bad';
+      showFlash('🚨 TAB SWITCH DETECTED — VIOLATION!', 3500);
+      giveWarning('tab', 'You switched away from the exam tab. This activity is monitored and logged.', '🔀', 'Tab Switch Detected!',
+        'Switching browser tabs or windows is prohibited during the exam. This event has been logged. A third violation will auto-submit your exam.');
+      setTimeout(() => {
+        document.getElementById('aiTab').textContent = 'Watching ✓';
+        document.getElementById('aiTab').className = 'ai-val ok';
+      }, 3000);
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    if (examStarted && !isSubmitting && !document.hidden) {
+      showFlash('⚠ WINDOW FOCUS LOST', 2000);
+      giveWarning('tab', 'Exam window lost focus — possible external application use.', '🪟', 'Window Focus Lost', null);
+    }
+  });
+}
+function setCamBadge(icon, text) {
+
+  const badgeTxt = document.getElementById('camBadgeTxt');
+  const badgeDot = document.getElementById('camBadgeDot');
+
+  if (badgeTxt) {
+    badgeTxt.textContent = text;
+  }
+
+  if (badgeDot) {
+    badgeDot.textContent = icon;
+  }
+}
+
+/* ══════════════════════════════════════
+   WARNING SYSTEM
+══════════════════════════════════════ */
+// type: 'face' | 'obj' | 'tab' | 'audio'
+function giveWarning(type, msg, icon, title, detail) {
+  if (!examStarted || isSubmitting || warnCooldown) return;
+  warnCooldown = true;
+  setTimeout(() => { warnCooldown = false; }, 1500);
+
+  warnings++;
+  violationsCount++;
+  document.getElementById('violationsInput').value = violationsCount;
+  document.getElementById('warnNum').textContent = warnings;
+  document.getElementById('warnCurr').textContent = warnings;
+  document.getElementById('warnMsg').textContent = msg;
+  document.getElementById('warnEmo').textContent = icon || '⚠️';
+  document.getElementById('warnTitle').textContent = title || 'Violation Detected';
+
+  // Update pill
+  const pill = document.getElementById('warnPill');
+  pill.textContent = `⚠ ${warnings} / 3 Warnings`;
+  if (warnings >= 2) pill.classList.add('active');
+
+  // Detail box
+  const detailBox = document.getElementById('warnDetailBox');
+  if (detail) {
+    detailBox.textContent = detail;
+    detailBox.style.display = 'block';
+  } else {
+    detailBox.style.display = 'none';
+  }
+
+  // Disable dismiss briefly
+  const btn = document.getElementById('warnDismissBtn');
+  btn.disabled = true;
+  btn.textContent = 'Read the warning carefully…';
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = '✓ I Understand — Continue Exam';
+  }, 2000);
+
+  document.getElementById('warnOverlay').classList.add('show');
+  logEvent(`[${type.toUpperCase()}] ${msg}`);
+  logViolation(msg, 'vi-' + type);
+
+  if (warnings >= 3) {
+    btn.disabled = true;
+    btn.textContent = 'Auto-submitting exam…';
+    setTimeout(() => triggerAutoSubmit('3 violations reached', 'Maximum number of violations reached. Your exam is being submitted.'), 2000);
+  }
+}
+
+function dismissWarning() {
+  document.getElementById('warnOverlay').classList.remove('show');
+}
+
+function showFlash(msg, dur) {
+  const b = document.getElementById('flashBanner');
+  b.textContent = msg;
+  b.style.display = 'block';
+  clearTimeout(b._t);
+  b._t = setTimeout(() => { b.style.display = 'none'; }, dur || 3000);
+}
+
+function triggerAutoSubmit(reason, subtitle) {
+  if (isSubmitting) return;
+  isSubmitting = true;
+  clearInterval(timerID);
+  const overlay = document.getElementById('autoSubmitOverlay');
+  document.getElementById('asReason').textContent = subtitle || reason;
+  overlay.classList.add('show');
+  let cnt = 3;
+  const el = document.getElementById('asCountdown');
+  el.textContent = cnt;
+  const cid = setInterval(() => {
+    cnt--;
+    el.textContent = cnt;
+    if (cnt <= 0) {
+      clearInterval(cid);
+      logEvent('Auto-submitted: ' + reason);
+      document.getElementById('examForm').submit();
+    }
+  }, 1000);
+}
+
+/* ══════════════════════════════════════
+   STATUS HELPERS
+══════════════════════════════════════ */
+function setStatus(id, state, label) {
+  const el = document.getElementById(id);
+  el.className = 'sp ' + state;
+  el.innerHTML = `<div class="sp-dot"></div>${label}`;
+}
+
+function logEvent(ev) {
+  fetch('/log_event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: ev }) }).catch(() => {});
+}
+
+function logViolation(msg, cls) {
+  const list = document.getElementById('vlogList');
+  // Remove placeholder
+  const ph = list.querySelector('[style]');
+  if (ph) ph.remove();
+  const item = document.createElement('div');
+  item.className = 'vlog-item ' + (cls || 'vi-misc');
+  item.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  list.prepend(item);
+}
+
+/* ══════════════════════════════════════
+   QUESTION NAVIGATION
+══════════════════════════════════════ */
+function buildNav() {
+  const grid = document.getElementById('navGrid');
+  for (let i = 0; i < TOTAL_Q; i++) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nav-btn' + (i === 0 ? ' current' : '');
+    btn.textContent = i + 1;
+    btn.onclick = () => goToQ(i);
+    grid.appendChild(btn);
+  }
+}
+
+function showQ(idx) {
+  curQ = idx;
+  document.querySelectorAll('.qcard').forEach((q, i) => q.classList.toggle('active', i === idx));
+  document.querySelectorAll('.nav-btn').forEach((b, i) => { b.classList.remove('current'); if (i === idx) b.classList.add('current'); });
+  const pct = ((idx + 1) / TOTAL_Q * 100);
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progText').textContent = `${idx + 1} / ${TOTAL_Q}`;
+  // Scroll to top of exam area
+  document.getElementById('examArea').scrollTop = 0;
+}
+
+function selectOpt(label, qid, key) {
+  const card = label.closest('.qcard');
+  card.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
+  label.classList.add('selected');
+  label.querySelector('input').checked = true;
+  const idx = parseInt(card.id.replace('qcard',''));
+  document.querySelectorAll('.nav-btn')[idx].classList.add('answered');
+  // Enable next/submit
+  const nextId = 'nextBtn' + idx;
+  const hintId = 'hint' + idx;
+  const nb = document.getElementById(nextId);
+  if (nb) nb.disabled = false;
+  const hb = document.getElementById(hintId);
+  if (hb) hb.textContent = '';
+}
+
+function goToQ(i) { showQ(i); }
+function nextQ() { if (curQ < TOTAL_Q - 1) showQ(curQ + 1); }
+function prevQ() {
+  if (curQ > 0) {
+    showQ(curQ - 1);
+  } else {
+    // Already at first question — shouldn't happen (button hidden) but guard anyway
+    showFlash('🚫 You are on the first question.', 2000);
+  }
+}
+
+/* ══════════════════════════════════════
+   THEME
+══════════════════════════════════════ */
+function toggleTheme() {
+  const h = document.documentElement;
+  const t = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  h.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '🌙' : '☀️';
+  localStorage.setItem('theme', t);
+}
+(function(){
+  const t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = t === 'dark' ? '🌙' : '☀️';
+})();
+</script>
+</body>
+</html>

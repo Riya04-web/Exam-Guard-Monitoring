@@ -84,7 +84,7 @@ python app.py
 ---
 
 ## 📸 Screenshots
-![Uploading result page.png…]()
+<img width="1323" height="624" alt="result page" src="https://github.com/user-attachments/assets/b04bd204-4bf7-4949-a470-6f4bf658c475" />
 <img width="1365" height="767" alt="exam page" src="https://github.com/user-attachments/assets/57e7a5ad-641a-409a-bea9-7c623fb85ebf" />
 <img width="1327" height="633" alt="admin dashboard" src="https://github.com/user-attachments/assets/b34a54c0-ec8e-4989-a1af-1f25489533a2" />
 <img width="1333" height="627" alt="student dashboard" src="https://github.com/user-attachments/assets/46930dac-333e-40eb-9ae6-e3b5624502e1" />

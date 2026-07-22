@@ -84,13 +84,12 @@ python app.py
 ---
 
 ## 📸 Screenshots
+![Uploading result page.png…]()
+<img width="1365" height="767" alt="exam page" src="https://github.com/user-attachments/assets/57e7a5ad-641a-409a-bea9-7c623fb85ebf" />
+<img width="1327" height="633" alt="admin dashboard" src="https://github.com/user-attachments/assets/b34a54c0-ec8e-4989-a1af-1f25489533a2" />
+<img width="1333" height="627" alt="student dashboard" src="https://github.com/user-attachments/assets/46930dac-333e-40eb-9ae6-e3b5624502e1" />
+<img width="1340" height="623" alt="login page" src="https://github.com/user-attachments/assets/e1fc4afd-6ca4-4c7d-b36a-89fdca3e069d" />
 
-<img width="1333" height="627" alt="student dashboard" src="https://github.com/user-attachments/assets/970b3f8c-4198-4c09-9c2d-055e1a4a8fdb" />
-<img width="1336" height="627" alt="admin page" src="https://github.com/user-attachments/assets/bcbf24a1-ca8e-40c4-94b8-676719aefa9b" />
-<img width="1340" height="623" alt="login page" src="https://github.com/user-attachments/assets/24ece6cb-fdd7-4f8c-994d-54f9bad04a94" />
-<img width="1323" height="624" alt="result page" src="https://github.com/user-attachments/assets/25406d92-949b-434f-ac2b-ec95ff058f2f" />
-<img width="1365" height="767" alt="exam page" src="https://github.com/user-attachments/assets/d0826d97-c94f-4f98-b8e8-3711c4fae396" />
-<img width="1327" height="633" alt="admin dashboard" src="https://github.com/user-attachments/assets/db0008d8-171c-4ecc-9045-e02fd4da32ae" />
 
 
 
